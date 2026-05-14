@@ -82,17 +82,24 @@ jobs:
             "${ANDROID_ABI}" \
             aac ac3 eac3 mp2 mp3 flac opus vorbis
 
-      - name: Build Media3 FFmpeg decoder AAR
-        run: |
+            - name: Build Media3 FFmpeg decoder AAR
+          run: |
           cd media
           chmod +x ./gradlew
-          ./gradlew :libraries:decoder_ffmpeg:assembleRelease --stacktrace
+          ./gradlew :lib-decoder-ffmpeg:assembleRelease --stacktrace
 
       - name: Replace my-tv-0 FFmpeg AAR
         run: |
           mkdir -p my-tv-0/app/libs
 
-          AAR_FILE=$(find media/libraries/decoder_ffmpeg/build/outputs/aar -name "*release*.aar" | head -n 1)
+          echo "Search generated AAR files:"
+          find media -name "*.aar" -type f
+
+          AAR_FILE=$(find media -name "*decoder*ffmpeg*release*.aar" -type f | head -n 1)
+
+          if [ -z "$AAR_FILE" ]; then
+            AAR_FILE=$(find media -name "*release*.aar" -type f | head -n 1)
+          fi
 
           if [ -z "$AAR_FILE" ]; then
             echo "FFmpeg AAR not found"
@@ -105,6 +112,7 @@ jobs:
 
           echo "Current app/libs:"
           ls -lh my-tv-0/app/libs/
+
 
       - name: Show dependency insight for OkHttp
         run: |
