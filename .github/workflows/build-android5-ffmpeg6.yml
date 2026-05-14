@@ -41,7 +41,9 @@ jobs:
             libtool \
             pkg-config \
             yasm \
-            nasm
+            nasm \
+            unzip \
+            zip
 
       - name: Install Android NDK r26b
         run: |
@@ -49,6 +51,8 @@ jobs:
 
       - name: Update Media3 version to 1.9.3
         run: |
+          set -euxo pipefail
+
           cd my-tv-0
 
           echo "Before:"
@@ -104,24 +108,58 @@ jobs:
 
       - name: Build Media3 FFmpeg decoder AAR
         run: |
+          set -euxo pipefail
+
           cd media
           chmod +x ./gradlew
+
           ./gradlew :lib-decoder-ffmpeg:assembleRelease --stacktrace
+
+      - name: Patch FFmpeg AAR minSdk to 21
+        run: |
+          set -euxo pipefail
+
+          AAR_FILE=$(find media -name "lib-decoder-ffmpeg-release.aar" -type f | head -n 1)
+
+          if [ -z "${AAR_FILE}" ]; then
+            echo "FFmpeg AAR not found"
+            exit 1
+          fi
+
+          echo "Patch AAR: ${AAR_FILE}"
+
+          WORK_DIR="/tmp/ffmpeg-aar-patch"
+          rm -rf "${WORK_DIR}"
+          mkdir -p "${WORK_DIR}"
+
+          unzip -q "${AAR_FILE}" -d "${WORK_DIR}"
+
+          echo "Before patch AndroidManifest.xml:"
+          cat "${WORK_DIR}/AndroidManifest.xml"
+
+          sed -i 's/android:minSdkVersion="23"/android:minSdkVersion="21"/g' "${WORK_DIR}/AndroidManifest.xml"
+          sed -i 's/minSdkVersion="23"/minSdkVersion="21"/g' "${WORK_DIR}/AndroidManifest.xml"
+
+          echo "After patch AndroidManifest.xml:"
+          cat "${WORK_DIR}/AndroidManifest.xml"
+
+          cd "${WORK_DIR}"
+          zip -qr "${AAR_FILE}" .
+
+          echo "Patched AAR saved: ${AAR_FILE}"
 
       - name: Replace my-tv-0 FFmpeg AAR
         run: |
+          set -euxo pipefail
+
           mkdir -p my-tv-0/app/libs
 
           echo "Search generated AAR files:"
           find media -name "*.aar" -type f
 
-          AAR_FILE=$(find media -name "*decoder*ffmpeg*release*.aar" -type f | head -n 1)
+          AAR_FILE=$(find media -name "lib-decoder-ffmpeg-release.aar" -type f | head -n 1)
 
-          if [ -z "$AAR_FILE" ]; then
-            AAR_FILE=$(find media -name "*release*.aar" -type f | head -n 1)
-          fi
-
-          if [ -z "$AAR_FILE" ]; then
+          if [ -z "${AAR_FILE}" ]; then
             echo "FFmpeg AAR not found"
             exit 1
           fi
@@ -135,15 +173,22 @@ jobs:
 
       - name: Show dependency insight for OkHttp
         run: |
+          set -euxo pipefail
+
           cd my-tv-0
           chmod +x ./gradlew
+
           ./gradlew :app:dependencyInsight \
             --dependency okhttp \
             --configuration releaseRuntimeClasspath || true
 
       - name: Build my-tv-0 release APK
         run: |
+          set -euxo pipefail
+
           cd my-tv-0
+          chmod +x ./gradlew
+
           ./gradlew clean assembleRelease --stacktrace
 
       - name: Upload APK
