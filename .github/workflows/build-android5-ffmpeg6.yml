@@ -115,7 +115,7 @@ jobs:
 
           ./gradlew :lib-decoder-ffmpeg:assembleRelease --stacktrace
 
-      - name: Patch FFmpeg AAR minSdk to 21
+            - name: Patch FFmpeg AAR minSdk to 21
         run: |
           set -euxo pipefail
 
@@ -126,10 +126,16 @@ jobs:
             exit 1
           fi
 
+          AAR_FILE="$(realpath "${AAR_FILE}")"
+
           echo "Patch AAR: ${AAR_FILE}"
 
           WORK_DIR="/tmp/ffmpeg-aar-patch"
+          PATCHED_AAR="/tmp/lib-decoder-ffmpeg-release-patched.aar"
+
           rm -rf "${WORK_DIR}"
+          rm -f "${PATCHED_AAR}"
+
           mkdir -p "${WORK_DIR}"
 
           unzip -q "${AAR_FILE}" -d "${WORK_DIR}"
@@ -144,9 +150,14 @@ jobs:
           cat "${WORK_DIR}/AndroidManifest.xml"
 
           cd "${WORK_DIR}"
-          zip -qr "${AAR_FILE}" .
+          zip -qr "${PATCHED_AAR}" .
+
+          cp "${PATCHED_AAR}" "${AAR_FILE}"
 
           echo "Patched AAR saved: ${AAR_FILE}"
+
+          unzip -p "${AAR_FILE}" AndroidManifest.xml
+
 
       - name: Replace my-tv-0 FFmpeg AAR
         run: |
