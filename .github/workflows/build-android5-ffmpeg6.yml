@@ -1,0 +1,132 @@
+name: Build Android 5 APK with Media3 1.10.0 and FFmpeg 6.0
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout my-tv-0
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: my-tv-0
+
+      - name: Checkout AndroidX Media 1.10.0
+        uses: actions/checkout@v4
+        with:
+          repository: androidx/media
+          ref: 1.10.0
+          path: media
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Linux build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            git \
+            libtool \
+            pkg-config \
+            yasm \
+            nasm
+
+      - name: Install Android NDK r26b
+        run: |
+          sdkmanager "ndk;26.1.10909125"
+
+      - name: Update Media3 version to 1.10.0
+        run: |
+          cd my-tv-0
+
+          echo "Before:"
+          grep 'media3 =' gradle/libs.versions.toml || true
+
+          sed -i 's/media3 = ".*"/media3 = "1.10.0"/' gradle/libs.versions.toml
+
+          echo "After:"
+          grep 'media3 =' gradle/libs.versions.toml
+
+      - name: Build FFmpeg 6.0 native libraries
+        run: |
+          cd media
+
+          export FFMPEG_MODULE_PATH="$(pwd)/libraries/decoder_ffmpeg/src/main"
+          export NDK_PATH="$ANDROID_HOME/ndk/26.1.10909125"
+          export HOST_PLATFORM="linux-x86_64"
+          export ANDROID_ABI=21
+
+          cd "${FFMPEG_MODULE_PATH}/jni"
+
+          git clone https://git.ffmpeg.org/ffmpeg.git
+          cd ffmpeg
+          git checkout release/6.0
+          cd ..
+
+          ./build_ffmpeg.sh \
+            "${FFMPEG_MODULE_PATH}" \
+            "${NDK_PATH}" \
+            "${HOST_PLATFORM}" \
+            "${ANDROID_ABI}" \
+            aac ac3 eac3 mp2 mp3 flac opus vorbis
+
+      - name: Build Media3 FFmpeg decoder AAR
+        run: |
+          cd media
+          chmod +x ./gradlew
+          ./gradlew :libraries:decoder_ffmpeg:assembleRelease --stacktrace
+
+      - name: Replace my-tv-0 FFmpeg AAR
+        run: |
+          mkdir -p my-tv-0/app/libs
+
+          AAR_FILE=$(find media/libraries/decoder_ffmpeg/build/outputs/aar -name "*release*.aar" | head -n 1)
+
+          if [ -z "$AAR_FILE" ]; then
+            echo "FFmpeg AAR not found"
+            exit 1
+          fi
+
+          echo "Found AAR: ${AAR_FILE}"
+
+          cp "${AAR_FILE}" my-tv-0/app/libs/lib-decoder-ffmpeg-release.aar
+
+          echo "Current app/libs:"
+          ls -lh my-tv-0/app/libs/
+
+      - name: Show dependency insight for OkHttp
+        run: |
+          cd my-tv-0
+          chmod +x ./gradlew
+          ./gradlew :app:dependencyInsight \
+            --dependency okhttp \
+            --configuration releaseRuntimeClasspath || true
+
+      - name: Build my-tv-0 release APK
+        run: |
+          cd my-tv-0
+          ./gradlew clean assembleRelease --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-tv-0-android5-media3-1.10.0-ffmpeg6-apk
+          path: my-tv-0/app/build/outputs/apk/release/*.apk
+
+      - name: Upload FFmpeg AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: lib-decoder-ffmpeg-release-aar
+          path: my-tv-0/app/libs/lib-decoder-ffmpeg-release.aar
