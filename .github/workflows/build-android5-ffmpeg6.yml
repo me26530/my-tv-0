@@ -1,4 +1,4 @@
-name: Build Android 5 APK with Media3 1.10.0 and FFmpeg 6.0
+name: Build Android 5 APK with Media3 1.9.3 and FFmpeg 6.0
 
 on:
   workflow_dispatch:
@@ -14,11 +14,11 @@ jobs:
           ref: main
           path: my-tv-0
 
-      - name: Checkout AndroidX Media 1.10.0
+      - name: Checkout AndroidX Media 1.9.3
         uses: actions/checkout@v4
         with:
           repository: androidx/media
-          ref: 1.10.0
+          ref: 1.9.3
           path: media
 
       - name: Set up JDK 17
@@ -47,14 +47,14 @@ jobs:
         run: |
           sdkmanager "ndk;26.1.10909125"
 
-      - name: Update Media3 version to 1.10.0
+      - name: Update Media3 version to 1.9.3
         run: |
           cd my-tv-0
 
           echo "Before:"
           grep 'media3 =' gradle/libs.versions.toml || true
 
-          sed -i 's/media3 = ".*"/media3 = "1.10.0"/' gradle/libs.versions.toml
+          sed -i 's/media3 = ".*"/media3 = "1.9.3"/' gradle/libs.versions.toml
 
           echo "After:"
           grep 'media3 =' gradle/libs.versions.toml
@@ -149,7 +149,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: my-tv-0-android5-media3-1.10.0-ffmpeg6-apk
+          name: my-tv-0-android5-media3-1.9.3-ffmpeg6-apk
           path: my-tv-0/app/build/outputs/apk/release/*.apk
 
       - name: Upload FFmpeg AAR
