@@ -61,6 +61,8 @@ jobs:
 
       - name: Build FFmpeg 6.0 native libraries
         run: |
+          set -euxo pipefail
+
           cd media
 
           export FFMPEG_MODULE_PATH="$(pwd)/libraries/decoder_ffmpeg/src/main"
@@ -68,22 +70,40 @@ jobs:
           export HOST_PLATFORM="linux-x86_64"
           export ANDROID_ABI=21
 
+          echo "FFMPEG_MODULE_PATH=${FFMPEG_MODULE_PATH}"
+          echo "NDK_PATH=${NDK_PATH}"
+          echo "HOST_PLATFORM=${HOST_PLATFORM}"
+          echo "ANDROID_ABI=${ANDROID_ABI}"
+
           cd "${FFMPEG_MODULE_PATH}/jni"
 
-          git clone https://git.ffmpeg.org/ffmpeg.git
+          if [ ! -d ffmpeg ]; then
+            git clone https://git.ffmpeg.org/ffmpeg.git
+          fi
+
           cd ffmpeg
+          git fetch --all --tags
           git checkout release/6.0
           cd ..
 
-          ./build_ffmpeg.sh \
-            "${FFMPEG_MODULE_PATH}" \
-            "${NDK_PATH}" \
-            "${HOST_PLATFORM}" \
-            "${ANDROID_ABI}" \
-            aac ac3 eac3 mp2 mp3 flac opus vorbis
+          {
+            ./build_ffmpeg.sh \
+              "${FFMPEG_MODULE_PATH}" \
+              "${NDK_PATH}" \
+              "${HOST_PLATFORM}" \
+              "${ANDROID_ABI}" \
+              aac ac3 eac3 mp2 mp3 flac opus vorbis
+          } 2>&1 | tee /tmp/ffmpeg-build.log
 
-            - name: Build Media3 FFmpeg decoder AAR
-          run: |
+      - name: Upload FFmpeg build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-build-log
+          path: /tmp/ffmpeg-build.log
+
+      - name: Build Media3 FFmpeg decoder AAR
+        run: |
           cd media
           chmod +x ./gradlew
           ./gradlew :lib-decoder-ffmpeg:assembleRelease --stacktrace
@@ -112,7 +132,6 @@ jobs:
 
           echo "Current app/libs:"
           ls -lh my-tv-0/app/libs/
-
 
       - name: Show dependency insight for OkHttp
         run: |
